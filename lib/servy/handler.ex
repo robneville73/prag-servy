@@ -6,6 +6,7 @@ defmodule Servy.Handler do
 
   import Servy.Plugins, only: [rewrite_path: 1, log: 1, track: 1]
   import Servy.Parser, only: [parse: 1]
+  import View, only: [render: 3]
 
   alias Servy.Conv
   alias Servy.BearController
@@ -23,20 +24,35 @@ defmodule Servy.Handler do
     |> format_response
   end
 
-  def route(%Conv{method: "GET", path: "/snapshots"} = conv) do
-    parent = self() # the request handling process
+  def route(%Conv{method: "GET", path: "/404s"} = conv) do
+    %{conv | status: 200, resp_body: inspect Servy.FourOhFourCounter.get_counts}
+  end
 
-    spawn(fn -> send(parent, {:result, VideoCam.get_snapshot("cam-1")}) end)
-    spawn(fn -> send(parent, {:result, VideoCam.get_snapshot("cam-2")}) end)
-    spawn(fn -> send(parent, {:result, VideoCam.get_snapshot("cam-3")}) end)
+  def route(%Conv{method: "GET", path: "/new_pledge"} = conv) do
+    Servy.PledgeController.new(conv)
+  end
 
-    snapshot1 = receive do {:result, filename} -> filename end
-    snapshot2 = receive do {:result, filename} -> filename end
-    snapshot3 = receive do {:result, filename} -> filename end
+  def route(%Conv{method: "POST", path: "/pledges"} = conv) do
+    Servy.PledgeController.create(conv, conv.params)
+  end
 
-    snapshots = [snapshot1, snapshot2, snapshot3]
+  def route(%Conv{method: "GET", path: "/recent_pledges"} = conv) do
+    Servy.PledgeController.index(conv)
+  end
 
-    %{ conv | status: 200, resp_body: inspect snapshots }
+  def route(%Conv{method: "GET", path: "/sensors"} = conv) do
+   
+    task = Task.async(Servy.Tracker, :get_location, ["bigfoot"])
+
+    snapshots = 
+      ["cam-1", "cam-2", "cam-3"]
+      |> Enum.map(&Task.async(VideoCam, :get_snapshot, [&1]))
+      |> Enum.map(&Task.await/1)
+
+    where_is_bigfoot = Task.await(task)
+
+    render(conv, "sensor.eex", 
+          snapshots: snapshots, bigfoot: where_is_bigfoot)
   end
 
   def route(%Conv{method: "GET", path: "/wildthings"} = conv) do
@@ -117,7 +133,8 @@ defmodule Servy.Handler do
   end
 
   def put_resp_size(%Conv{} = conv) do
-    %{ conv | resp_headers: Map.put(conv.resp_headers, "Content-Length", byte_size(conv.resp_body)) }
+    %{ conv | resp_headers: Map.put(conv.resp_headers, "Content-Length", 
+                                    byte_size(conv.resp_body)) }
   end
 
   def write_resp_headers(%Conv{ resp_headers: resp_headers}) do

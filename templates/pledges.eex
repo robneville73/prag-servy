@@ -1,0 +1,7 @@
+<h1>Pledges</h1>
+
+<ul>
+    <%= for pledge <- pledges do %>
+    <li><%= pledge.name %> - <%= pledge.amount %></li>
+    <% end %>
+</ul>
