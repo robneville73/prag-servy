@@ -10,7 +10,6 @@ defmodule Servy.Handler do
 
   alias Servy.Conv
   alias Servy.BearController
-  alias Servy.VideoCam
 
   @doc "Transforms the request into a response."
   def handle(request) do
@@ -36,23 +35,16 @@ defmodule Servy.Handler do
     Servy.PledgeController.create(conv, conv.params)
   end
 
-  def route(%Conv{method: "GET", path: "/recent_pledges"} = conv) do
+  def route(%Conv{method: "GET", path: "/pledges"} = conv) do
     Servy.PledgeController.index(conv)
   end
 
   def route(%Conv{method: "GET", path: "/sensors"} = conv) do
    
-    task = Task.async(Servy.Tracker, :get_location, ["bigfoot"])
-
-    snapshots = 
-      ["cam-1", "cam-2", "cam-3"]
-      |> Enum.map(&Task.async(VideoCam, :get_snapshot, [&1]))
-      |> Enum.map(&Task.await/1)
-
-    where_is_bigfoot = Task.await(task)
+    sensor_data = Servy.SensorServer.get_sensor_data()
 
     render(conv, "sensor.eex", 
-          snapshots: snapshots, bigfoot: where_is_bigfoot)
+          snapshots: sensor_data.snapshots, bigfoot: sensor_data.location)
   end
 
   def route(%Conv{method: "GET", path: "/wildthings"} = conv) do

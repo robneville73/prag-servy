@@ -2,48 +2,43 @@ defmodule Servy.FourOhFourCounter do
 
   @name __MODULE__
 
+  use GenServer
+
   # client interface
-  def start do
-    pid = spawn(__MODULE__, :loop, [%{}])
-    Process.register(pid, @name)
+  def start_link(_arg) do
+    IO.puts "Starting the 404 Counter server..."
+    GenServer.start_link(__MODULE__, %{}, name: @name)
   end
 
   def bump_count(path) do
-    send @name, {self(), :bump_count, path}
-
-    receive do {:ok, _state} -> :ok end
+    GenServer.call @name, {:bump_count, path}
   end
 
   def get_count(path) do
-    send @name, {self(), :get_count, path}
-
-    receive do {:ok, count} -> count end
+    GenServer.call @name, {:get_count, path}
   end
 
   def get_counts do
-    send @name, {self(), :get_counts}
-
-    receive do {:ok, sum} -> sum end
+    GenServer.call @name, :get_counts
   end
 
   # server
 
-  def loop(state) do
-    receive do
-      {sender, :bump_count, path} ->
-        state = Map.update(state, path, 1, fn curr_val -> curr_val + 1 end)
-        send sender, {:ok, state}
-        loop(state)
-      {sender, :get_count, path} ->
-        value = Map.get(state, path, 0)
-        send sender, {:ok, value}
-        loop(state)
-      {sender, :get_counts} ->
-        send sender, {:ok, state}
-        loop(state)
-      unknown ->
-        IO.puts "Unknown message type of #{inspect unknown}"
-        loop(state)
-    end
+  def init(state) do
+    {:ok, state}
   end
+
+  def handle_call(:get_counts, _from, state) do
+    {:reply, state, state}
+  end
+
+  def handle_call({:get_count, path}, _from, state) do
+    {:reply, Map.get(state, path, 0), state}
+  end
+
+  def handle_call({:bump_count, path}, _from, state) do
+    state = Map.update(state, path, 1, fn curr_val -> curr_val + 1 end)
+    {:reply, {:ok, state}, state}
+  end
+
 end
